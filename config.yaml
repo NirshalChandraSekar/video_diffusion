@@ -1,4 +1,8 @@
 device: "cuda:4"
 image_size:
-  height: 480
-  width: 640
+  height: 128
+  width: 128
+depth_range:
+  min: 0.0
+  max: 0.0
+  
