@@ -1,8 +1,7 @@
-device: "cuda:4"
+depth_range:
+  max: 60.569854736328125
+  min: 7.274515628814697
+device: cuda:4
 image_size:
   height: 128
   width: 128
-depth_range:
-  min: 0.0
-  max: 0.0
-  
