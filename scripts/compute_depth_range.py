@@ -1,5 +1,28 @@
 """
 This script reads the depth images from the dataset and finds the global minimum and maximum depth values across all images.
+
+The dataset folder structure is assumed to be:
+
+peract_dataset/
+│
+├── Task1/ 
+│   └── all_variations/
+│       └── episodes/
+│           ├── episode0/
+│           │   └── front_depth/
+│           │       ├── 000000.png
+│           │       ├── 000001.png
+│           │       └── ...
+│           └── episode1/
+│               └── front_depth/
+│                   ├── 000000.png
+│                   └── ...
+├── Task2/
+│   └── all_variations/
+│       └── episodes/
+│           └── ...
+└── Task3/
+    └── ...
 """
 
 import os

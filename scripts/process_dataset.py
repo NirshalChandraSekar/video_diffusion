@@ -40,6 +40,7 @@ if __name__ == "__main__":
     depth_max = config['depth_range']['max']
 
     normalized_depth = normalize_depth(decoded_depth, depth_min, depth_max)
+    normalized_depth = normalized_depth.astype(np.float32)
     print("normalized depth stats:")
     print(f"Min: {np.min(normalized_depth)}")
     print(f"Max: {np.max(normalized_depth)}")
