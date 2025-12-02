@@ -18,3 +18,8 @@ unet:
   out_channels: 1
   attn_heads: 8
   attn_dim_head: 32
+
+encoder:
+  text_embedding_dim: 512
+  image_embedding_dim: 512
+  global_embedding_dim: 256

@@ -12,6 +12,10 @@ from einops import rearrange
 from einops_exts import rearrange_many
 import yaml
 
+import os
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 with open("../config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
@@ -612,7 +616,12 @@ class UNet3D(nn.Module):
 
 if __name__ == "__main__":
 
-    B, C, T, H, W = 8, 1, 10, 128, 128
+    dist.init_process_group(backend='nccl')
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    device = torch.device(f"cuda:{local_rank}")
+
+    B, C, T, H, W = 4, 1, 10, 128, 128
     text_emb_dim = 64
     image_emb_dim = 256
     cond_dim = text_emb_dim + image_emb_dim
@@ -650,13 +659,10 @@ if __name__ == "__main__":
         attn_dim_head=config["unet"]["attn_dim_head"],
         init_kernel_size=7,
         use_sparse_linear_attn=True,
-    )
-    device = torch.device(DEVICE)
+    ).to(device)
 
-    if device.type == "cuda" and torch.cuda.device_count() > 1:
-        print("Using", torch.cuda.device_count(), "GPUs with DataParallel")
-        model = nn.DataParallel(model)  # <- this is the key line
-
+    model = DDP(model, device_ids=[local_rank], output_device=local_rank)
+    
     model = model.to(device)
     video = video.to(device)
     timesteps = timesteps.to(device)
