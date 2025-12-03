@@ -16,7 +16,7 @@ import os
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-with open("../config.yaml", "r") as f:
+with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 DEVICE = config["device"]

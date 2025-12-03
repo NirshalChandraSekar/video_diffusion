@@ -7,7 +7,7 @@ import torch.nn as nn
 from transformers import AutoTokenizer, CLIPTextModel
 import yaml
 
-with open("../config.yaml", 'r') as f:
+with open("config.yaml", 'r') as f:
     config = yaml.safe_load(f)
 
 DEVICE = config['device']
@@ -37,7 +37,6 @@ class TextEncoder(nn.Module):
         output = outputs.last_hidden_state[:, 0, :]  # (batch_size, hidden_size)
         
         return output
-    dddddddd
 
 
 class RGBDImageEncoder(nn.Module):
@@ -94,6 +93,11 @@ class globalEncoder(nn.Module):
                                 global_embedding_dim)  # Combine text and image embeddings
 
     def forward(self, texts, rgbd_images):
+        """        
+        texts: list of strings, length B
+        rgbd_images: (B, H, W, 4) tensor
+        returns: (B, global_embedding_dim) tensor
+        """
         text_embeddings = self.text_encoder.encode(texts)  # (B, hidden_size)
         rgbd_embeddings = self.rgbd_encoder(rgbd_images)   # (B, output_embedding_dim)
 
