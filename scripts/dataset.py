@@ -37,8 +37,13 @@ class VideoDataset(Dataset):
         depth_min = config['depth_range']['min']
         depth_max = config['depth_range']['max']
         # Normalize to [0, 1]
-        depth_normalized = (depth - depth_min) / (depth_max - depth_min)
-        depth_normalized = np.clip(depth_normalized, 0.0, 1.0)
+        # depth_normalized = (depth - depth_min) / (depth_max - depth_min)
+        # depth_normalized = np.clip(depth_normalized, 0.0, 1.0)
+
+        depth_normalized = 2.0 * ( (depth - depth_min) / (depth_max - depth_min) ) - 1.0
+        depth_normalized = np.clip(depth_normalized, -1.0, 1.0) # clip to [-1, 1]
+
+
         return depth_normalized
     
     def normalize_rgb(self, rgb):
@@ -85,17 +90,58 @@ class VideoDataset(Dataset):
 
 # sample usage
 if __name__ == "__main__":
-
-    # debug
-
-    dataset = VideoDataset(dataset_dir="../data/peract_processed_dataset", num_frames_to_diffuse=4)
+    dataset = VideoDataset(
+        dataset_dir="../data/peract_processed_dataset",
+        num_frames_to_diffuse=4
+    )
     print(f"Dataset length: {len(dataset)}")
+
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+
+    depth_min = config["depth_range"]["min"]
+    depth_max = config["depth_range"]["max"]
+    depth_range = depth_max - depth_min
+
     for batch in dataloader:
         text, rgbd_first_frame, frames_to_diffuse = batch
         print(f"Text length: {len(text)}")
-        print(f"RGBD First Frame shape: {rgbd_first_frame.shape}")  # (B, H, W, 4)
-        print(f"Frames to Diffuse shape: {frames_to_diffuse.shape}")  # (B, num_frames_to_diffuse, H, W)
+        print(f"RGBD First Frame shape: {rgbd_first_frame.shape}")
+        print(f"Frames to Diffuse shape: {frames_to_diffuse.shape}")
 
-        
+        for i in range(1):
+            episode_dir = f"debug_episode_{i}"
+            os.makedirs(episode_dir, exist_ok=True)
+
+            first_frame_rgb = rgbd_first_frame[i, :, :, :3].cpu().numpy()
+            first_frame_depth = rgbd_first_frame[i, :, :, 3].cpu().numpy()
+
+            first_frame_depth_unnormalized = ((first_frame_depth + 1.0) / 2.0) * depth_range + depth_min
+            depth_to_save = np.clip(
+                (first_frame_depth_unnormalized - depth_min) / depth_range,
+                0.0,
+                1.0,
+            )
+
+            cv2.imwrite(
+                os.path.join(episode_dir, "first_frame_rgb.png"),
+                (first_frame_rgb * 255).astype(np.uint8),
+            )
+            cv2.imwrite(
+                os.path.join(episode_dir, "first_frame_depth.png"),
+                (depth_to_save * 255).astype(np.uint8),
+            )
+
+            for t in range(frames_to_diffuse.shape[1]):
+                frame_depth = frames_to_diffuse[i, t, :, :].cpu().numpy()
+                frame_depth_unnormalized = ((frame_depth + 1.0) / 2.0) * depth_range + depth_min
+                depth_to_save = np.clip(
+                    (frame_depth_unnormalized - depth_min) / depth_range,
+                    0.0,
+                    1.0,
+                )
+                cv2.imwrite(
+                    os.path.join(episode_dir, f"frame_{t}_depth.png"),
+                    (depth_to_save * 255).astype(np.uint8),
+                )
+
         break

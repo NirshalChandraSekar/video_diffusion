@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger(
         project="depth-video-diffusion",
-        name="video-ddpm",
+        name="video-ddpm-correct-normalization",
         config=config,
     )
 
