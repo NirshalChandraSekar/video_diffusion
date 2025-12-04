@@ -175,7 +175,7 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         accelerator="gpu",
-        devices=[4, 5, 6],
+        devices=[4, 5, 6, 7],
         strategy=DDPStrategy(find_unused_parameters=True),
         max_epochs=config["training"]["num_epochs"],
         log_every_n_steps=10,

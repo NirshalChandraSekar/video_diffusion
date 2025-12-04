@@ -1,4 +1,4 @@
-device: "cuda:7"
+device: "cuda"
 
 image_size:
   height: 128
@@ -14,7 +14,7 @@ dataset_dir: "data/peract_processed_dataset"
 ## 3DUNet parameters
 unet:
   dim: 64
-  dim_mults: [1, 2, 4]
+  dim_mults: [1, 2, 4, 8]
   in_channels: 1
   out_channels: 1
   attn_heads: 8
@@ -23,7 +23,7 @@ unet:
 encoder:
   text_embedding_dim: 512
   image_embedding_dim: 512
-  global_embedding_dim: 256
+  global_embedding_dim: 512
 
 training:
   batch_size: 4
@@ -38,4 +38,3 @@ training:
 
 diffusion:
   num_timesteps: 1000
-  

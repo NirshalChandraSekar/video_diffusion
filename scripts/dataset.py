@@ -34,7 +34,7 @@ class VideoDataset(Dataset):
         return depth_float
     
     def normalize_depth(self, depth):
-        depth_min = config['depth_range']['min']
+        depth_min = config['depth_range']['min']                                  
         depth_max = config['depth_range']['max']
         # Normalize to [0, 1]
         # depth_normalized = (depth - depth_min) / (depth_max - depth_min)

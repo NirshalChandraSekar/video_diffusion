@@ -92,9 +92,15 @@ def sample_depth_videos(networks):
                     sample=samples,
                 ).prev_sample
 
-            samples = samples.permute(0, 2, 3, 4, 1)
-            samples = samples[0].detach().cpu().numpy()
-            samples = np.squeeze(samples, axis=-1)
+            samples = samples.permute(0, 2, 3, 4, 1) # (B, T, H, W, 1)
+            samples = samples[0].detach().cpu().numpy() # (T, H, W, 1)
+            samples = np.squeeze(samples, axis=-1) # (T, H, W) (normalised between -1 and 1)
+            
+            max_depth = config["depth_range"]["max"]
+            min_depth = config["depth_range"]["min"]
+            
+            # convert form -1 to 1 to 0 to 1
+            samples = (samples + 1.0) / 2.0
 
             episode_dir = os.path.join(save_root, f"episode_{idx:04d}")
             os.makedirs(episode_dir, exist_ok=True)
@@ -105,6 +111,6 @@ def sample_depth_videos(networks):
 
 
 if __name__ == "__main__":
-    ckpt_path = "models/latest.ckpt"
+    ckpt_path = "models/latest-v1.ckpt"
     networks = load_networks(ckpt_path, device)
     sample_depth_videos(networks)

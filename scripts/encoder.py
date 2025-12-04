@@ -102,7 +102,7 @@ class globalEncoder(nn.Module):
         rgbd_embeddings = self.rgbd_encoder(rgbd_images)   # (B, output_embedding_dim)
 
         combined = torch.cat((text_embeddings, rgbd_embeddings), dim=1)  # (B, hidden_size + output_embedding_dim)
-        global_embedding = self.linear(combined)  # (B, 256)
+        global_embedding = self.linear(combined)  # (B, global_embedding_dim)
 
         return global_embedding
 
