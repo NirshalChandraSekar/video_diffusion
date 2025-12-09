@@ -109,32 +109,86 @@ def sample_depth_videos(networks):
             max_depth = config["depth_range"]["max"]
             min_depth = config["depth_range"]["min"]
             
-            # convert form -1 to 1 to 0 to 1
+            # convert from [-1, 1] to [0, 1]
             samples = (samples + 1.0) / 2.0
 
             episode_dir = os.path.join(save_root, f"episode_{idx:04d}")
             os.makedirs(episode_dir, exist_ok=True)
-            for t in range(samples.shape[0]):
-                frame = np.clip(samples[t], 0.0, 1.0)
-                frame_path = os.path.join(episode_dir, f"frame_{t:03d}.png")
-                cv2.imwrite(frame_path, (frame * 255).astype(np.uint8))
 
-            # Save first frame RGB for reference
+            # --- get actual depth frames and normalize to [0, 1] ---
+            actual_depth_frames = frames_to_diffuse[0].cpu().numpy()  # (T, H, W)
+            actual_depth_frames = (actual_depth_frames + 1.0) / 2.0   # [0, 1]
+
+            # --- convert both to uint8 once ---
+            # --- convert both to uint8 once ---
+            gen_u8 = (np.clip(samples, 0.0, 1.0) * 255).astype(np.uint8)   # (T, H, W)
+            gt_u8  = (np.clip(actual_depth_frames, 0.0, 1.0) * 255).astype(np.uint8)
+
+            T, H, W = gen_u8.shape  # T should be 10
+
+            LABEL_HEIGHT = 40
+            grid_height = LABEL_HEIGHT + 2 * H
+            grid_width  = T * W
+
+            grid = np.zeros((grid_height, grid_width), dtype=np.uint8)
+
+            for t in range(T):
+                x_start = t * W
+                x_end   = (t + 1) * W
+
+                # --- TOP ROW = ACTUAL ---
+                grid[LABEL_HEIGHT : LABEL_HEIGHT + H, x_start:x_end] = gt_u8[t]
+
+                # --- BOTTOM ROW = GENERATED ---
+                grid[LABEL_HEIGHT + H : LABEL_HEIGHT + 2*H, x_start:x_end] = gen_u8[t]
+
+                # -----------------------------
+                # Draw white background for label
+                # -----------------------------
+                label = f"t = {t}"
+
+                # Rectangle background
+                cv2.rectangle(
+                    grid,
+                    (x_start, 0),
+                    (x_end, LABEL_HEIGHT),
+                    color=(255,),  # white background
+                    thickness=-1,   # filled rectangle
+                )
+
+                # Put black text on white background
+                cv2.putText(
+                    grid,
+                    label,
+                    (x_start + 10, LABEL_HEIGHT - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0,),  # black text
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            # Save final grid
+            out_path = os.path.join(episode_dir, "depth_grid_labeled.png")
+            cv2.imwrite(out_path, grid)
+
+
+            # (optional) if you STILL want individual frames, keep this loop;
+            # otherwise you can delete it.
+            for t in range(1):
+                # frame_path_gen = os.path.join(episode_dir, f"gen_frame_{t:03d}.png")
+                # cv2.imwrite(frame_path_gen, gen_u8[t])
+
+                frame_path_gt = os.path.join(episode_dir, f"actual_depth_frame_{t:03d}.png")
+                cv2.imwrite(frame_path_gt, gt_u8[t])
+
+            # Save first frame RGB for reference (unchanged)
             first_frame_rgb = rgbd_first_frame[0, :, :, :3].cpu().numpy()
             first_frame_rgb = cv2.cvtColor(first_frame_rgb, cv2.COLOR_RGB2BGR)
             cv2.imwrite(
                 os.path.join(episode_dir, "first_frame_rgb.png"),
                 (first_frame_rgb * 255).astype(np.uint8),
             )
-
-            # save the actual depth frames for reference
-            actual_depth_frames = frames_to_diffuse[0].cpu().numpy()  # (T, H, W)
-            for t in range(actual_depth_frames.shape[0]):
-                depth_frame = actual_depth_frames[t]
-                depth_frame = (depth_frame + 1.0) / 2.0  # normalize to 0-1
-                
-                frame_path = os.path.join(episode_dir, f"actual_depth_frame_{t:03d}.png")
-                cv2.imwrite(frame_path, (depth_frame * 255).astype(np.uint8))
 
             # print the text prompt for reference
             print(f"Saved diffused frames for episode {idx:04d} with prompt: {text[0]}")

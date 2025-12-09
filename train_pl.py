@@ -190,4 +190,8 @@ if __name__ == "__main__":
         callbacks=[checkpoint_callback],
     )
 
-    trainer.fit(model)
+    ckpt_path = "models/latest-v1.ckpt"  # path to checkpoint, if resuming training
+    if os.path.exists(ckpt_path):
+        trainer.fit(model, ckpt_path=ckpt_path)
+    else:
+        trainer.fit(model)
