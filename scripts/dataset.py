@@ -48,6 +48,7 @@ class VideoDataset(Dataset):
     
     def normalize_rgb(self, rgb):
         rgb_normalized = rgb.astype(np.float32) / 255.0
+        # rgb_normalized = rgb.astype(np.float32) / 127.5 - 1.0  # normalize to [-1, 1]
         return rgb_normalized
     
     def __getitem__(self, idx):
@@ -59,12 +60,12 @@ class VideoDataset(Dataset):
 
         first_frame_rgb = cv2.imread(os.path.join(episode_dir, "front_rgb", f"{frame_indices[0]}.png"))
         first_frame_rgb = cv2.cvtColor(first_frame_rgb, cv2.COLOR_BGR2RGB)
-        first_frame_rgb = self.normalize_rgb(first_frame_rgb)
+        first_frame_rgb = self.normalize_rgb(first_frame_rgb) # (H, W, 3)
         
         first_frame_depth = cv2.imread(os.path.join(episode_dir, "front_depth", f"{frame_indices[0]}.png"))
         first_frame_depth = cv2.cvtColor(first_frame_depth, cv2.COLOR_BGR2RGB)
         first_frame_depth = self.decode_depth(first_frame_depth)
-        first_frame_depth = self.normalize_depth(first_frame_depth)
+        first_frame_depth = self.normalize_depth(first_frame_depth) # (H, W)
 
         rgbd_first_frame = np.concatenate([first_frame_rgb, first_frame_depth[..., None]], axis=2)  # (H, W, 4)
 
@@ -82,7 +83,15 @@ class VideoDataset(Dataset):
         with open(os.path.join(episode_dir, "variation_descriptions.pkl"), "rb") as f:
             variational_descriptions = pickle.load(f)
 
-        text = variational_descriptions[0]
+        # text = variational_descriptions[0]
+        # randomly sample one description from the list
+        random_idx = np.random.randint(0, len(variational_descriptions))
+        text = variational_descriptions[random_idx]
+
+        # text = (B, )
+        # rgbd_first_frame = (B, H, W, 4)
+        # frames_to_diffuse = (B, T, H, W)
+
 
         return text, rgbd_first_frame, frames_to_diffuse
     

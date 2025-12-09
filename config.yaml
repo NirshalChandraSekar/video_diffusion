@@ -19,11 +19,18 @@ unet:
   out_channels: 1
   attn_heads: 8
   attn_dim_head: 32
+  null_cond_prob: 0.1
+
 
 encoder:
   text_embedding_dim: 512
   image_embedding_dim: 512
-  global_embedding_dim: 512
+  global_embedding_dim: 1024
+  # global_embedding_dim: 512
+
+diffusion:
+  num_timesteps: 1000
+  cond_scale: 3.0
 
 training:
   batch_size: 4
@@ -35,6 +42,3 @@ training:
   weight_decay: 1e-5
   num_warmup_steps: 500
   num_epochs: 10000
-
-diffusion:
-  num_timesteps: 1000

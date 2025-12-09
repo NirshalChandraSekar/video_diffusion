@@ -27,6 +27,11 @@ DEVICE = config["device"]
 
 
 def forward_pass(batch, networks, noise_scheduler, device, num_frames_to_diffuse):
+    '''
+    text = batch of text embeddings (B, text_dim)
+    rgbd_first_frame = first RGBD frame of the video (B, H, W, 4)
+    frames_to_diffuse = depth frames to diffuse (B, T, H, W)
+    '''
     text, rgbd_first_frame, frames_to_diffuse = batch
     global_encoder = networks["global_encoder"]
     noise_prediction_network = networks["noise_prediction_network"]
@@ -34,16 +39,18 @@ def forward_pass(batch, networks, noise_scheduler, device, num_frames_to_diffuse
     cond_embedding = global_encoder(text, rgbd_first_frame.to(device))
 
     B, T, H, W = frames_to_diffuse.shape
-    frames_to_diffuse = frames_to_diffuse.unsqueeze(2)
-    frames_to_diffuse = frames_to_diffuse.permute(0, 2, 1, 3, 4)
-    frames_to_diffuse = frames_to_diffuse.to(device)
+    frames_to_diffuse = frames_to_diffuse.unsqueeze(2) # (B, T, 1, H, W)
+    frames_to_diffuse = frames_to_diffuse.permute(0, 2, 1, 3, 4) # (B, 1, T, H, W)
+    frames_to_diffuse = frames_to_diffuse.to(device) 
 
-    noise = torch.randn(frames_to_diffuse.shape, device=device)
+    noise = torch.randn(frames_to_diffuse.shape, device=device) # (B, 1, T, H, W)
+    
     timesteps = torch.randint(
         0, noise_scheduler.config.num_train_timesteps, (B,), device=device
-    ).long()
+    ).long() # (B,)
+    
     noisy_frames = noise_scheduler.add_noise(frames_to_diffuse, noise, timesteps)
-    noise_pred = noise_prediction_network(noisy_frames, timesteps, cond_embedding)
+    noise_pred = noise_prediction_network(noisy_frames, timesteps, cond_embedding, null_cond_prob=config["unet"]["null_cond_prob"])
 
     loss = torch.nn.functional.mse_loss(noise_pred, noise)
     return loss
@@ -175,7 +182,7 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         accelerator="gpu",
-        devices=[4, 5, 6, 7],
+        devices=[3, 4, 5, 6, 7],
         strategy=DDPStrategy(find_unused_parameters=True),
         max_epochs=config["training"]["num_epochs"],
         log_every_n_steps=10,
