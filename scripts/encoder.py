@@ -13,9 +13,11 @@ from transformers import BertModel, BertTokenizer
 from typing import List, Union, Optional, Tuple
 
 
+# Load configuration from YAML file (device, embedding dims, etc.)
 with open("config.yaml", 'r') as f:
     config = yaml.safe_load(f)
 
+# Device and embedding dimensions from config
 DEVICE = config['device']
 text_embedding_dim = config['encoder']['text_embedding_dim']
 image_embedding_dim = config['encoder']['image_embedding_dim']
@@ -34,6 +36,10 @@ BERT_MODEL_DIM: int = 768  # Dimension size of BERT model output
 
 # Function to retrieve the BERT tokenizer
 def get_tokenizer() -> BertTokenizer:
+    """
+    Lazily load and return a singleton BERT tokenizer.
+    Ensures that the tokenizer is only loaded once.
+    """
     global TOKENIZER
     if not exists(TOKENIZER):
         TOKENIZER = BertTokenizer.from_pretrained('bert-base-cased')
@@ -41,6 +47,10 @@ def get_tokenizer() -> BertTokenizer:
 
 # Function to retrieve the BERT model, initializes if not loaded yet
 def get_bert() -> BertModel:
+    """
+    Lazily load and return a singleton BERT base model.
+    Moves the model to CUDA if available.
+    """
     global MODEL
     if not exists(MODEL):
         MODEL = BertModel.from_pretrained('bert-base-cased')
@@ -50,6 +60,15 @@ def get_bert() -> BertModel:
 
 # Function to tokenize a list or string of texts
 def tokenize(texts: Union[str, List[str], Tuple[str]]) -> torch.Tensor:
+    """
+    Tokenize input text(s) using the BERT tokenizer.
+
+    Args:
+        texts: A single string, or list/tuple of strings.
+
+    Returns:
+        token_ids (torch.Tensor): Long tensor of shape (B, L) with token IDs.
+    """
     if not isinstance(texts, (list, tuple)):
         texts = [texts]  # Convert a single string to a list
 
@@ -59,8 +78,8 @@ def tokenize(texts: Union[str, List[str], Tuple[str]]) -> torch.Tensor:
     encoding = tokenizer.batch_encode_plus(
         texts,
         add_special_tokens=True,  # Add [CLS] and [SEP] tokens
-        padding=True,  # Pad to the max sequence length
-        return_tensors='pt'  # Return as PyTorch tensor
+        padding=True,             # Pad to the max sequence length in the batch
+        return_tensors='pt'       # Return as PyTorch tensor
     )
 
     return encoding.input_ids
@@ -77,17 +96,19 @@ def bert_embed(
     Given tokenized input, returns embeddings from BERT.
     
     Parameters:
-        token_ids (torch.Tensor): Tensor of token IDs.
-        return_cls_repr (bool): If True, return the [CLS] token representation.
-        eps (float): Small epsilon for numerical stability.
+        token_ids (torch.Tensor): Tensor of token IDs of shape (B, L).
+        return_cls_repr (bool): If True, return the [CLS] token representation (B, D).
+                                Otherwise, return masked mean over tokens (excluding CLS).
+        eps (float): Small epsilon for numerical stability when normalizing.
         pad_id (int): Token ID to treat as padding (defaults to 0).
 
     Returns:
-        torch.Tensor: BERT embeddings (mean or [CLS] token).
+        torch.Tensor: BERT embeddings of shape (B, D) where D is hidden size.
     """
     model = get_bert()
     mask = token_ids != pad_id  # Create a mask to ignore padding tokens
 
+    # Move inputs and mask to CUDA if available (following model placement)
     if torch.cuda.is_available():
         token_ids = token_ids.cuda()
         mask = mask.cuda()
@@ -99,6 +120,7 @@ def bert_embed(
         output_hidden_states=True  # Get hidden states from all layers
     )
 
+    # Last layer hidden states: (B, L, D)
     hidden_state = outputs.hidden_states[-1]  # Get the last layer of hidden states
 
     # If return_cls_repr is True, return the representation of the [CLS] token
@@ -111,18 +133,22 @@ def bert_embed(
 
     # Calculate the mean of non-padding tokens by applying the mask
     mask = mask[:, 1:]  # Ignore the [CLS] token in the mask
-    mask = rearrange(mask, 'b n -> b n 1')  # Reshape for broadcasting
+    mask = rearrange(mask, 'b n -> b n 1')  # Reshape for broadcasting to (B, L-1, 1)
 
     # Weighted sum of token representations (ignoring padding)
-    numer = (hidden_state[:, 1:] * mask).sum(dim=1)
-    denom = mask.sum(dim=1)
-    masked_mean = numer / (denom + eps)  # Normalize by sum of mask (to avoid division by zero)
+    numer = (hidden_state[:, 1:] * mask).sum(dim=1)  # (B, D)
+    denom = mask.sum(dim=1)                          # (B, 1)
+    masked_mean = numer / (denom + eps)              # Normalize by sum of mask (avoid division by zero)
 
     return masked_mean
 
 
 
 class TextEncoder(nn.Module):
+    """
+    Wraps BERT + a small projection network to map text into
+    a fixed-size embedding of dimension `text_embedding_dim`.
+    """
     def __init__(self, device=DEVICE):
         super().__init__()
         self.device = device
@@ -139,8 +165,13 @@ class TextEncoder(nn.Module):
 
     def encode(self, texts):
         """
-        texts: str or list[str]
-        returns: (B, text_embedding_dim) tensor on self.device
+        Encode raw text(s) into dense embeddings.
+
+        Args:
+            texts: str or list[str] of length B
+
+        Returns:
+            emb (torch.Tensor): (B, text_embedding_dim) tensor on self.device.
         """
         # 1. Tokenize with your helper
         token_ids = tokenize(texts)  # (B, L) on CPU
@@ -153,7 +184,7 @@ class TextEncoder(nn.Module):
         # but we ensure it's on self.device for safety:
         emb = emb.to(self.device)
 
-        # 3. (Optional but nice) normalize BERT embedding
+        # 3. (Optional but nice) normalize BERT embedding to unit norm
         emb = F.normalize(emb, dim=-1)
 
         # 4. Project to text_embedding_dim (e.g. 512)
@@ -162,71 +193,46 @@ class TextEncoder(nn.Module):
         return emb
 
 
-# class TextEncoder(nn.Module):
-#     def __init__(self, device=DEVICE):
-#         super().__init__()
-#         self.device = device
-#         self.tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32", use_fast=True)
-#         self.model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
-#         self.model.eval()
-
-#         self.aligner = nn.Sequential(
-#             nn.Linear(text_embedding_dim, 1024),
-#             nn.ReLU(inplace=True),
-#             nn.Linear(1024, text_embedding_dim)
-#         ).to(self.device)
-
-#     def encode(self, texts):
-#         encoded_input = self.tokenizer(texts, 
-#                                        padding=True,
-#                                        return_tensors='pt'
-#                                     ).to(self.device)
-
-#         with torch.no_grad():
-#             outputs = self.model(**encoded_input)
-
-#         output = outputs.last_hidden_state[:, 0, :]  # (batch_size, hidden_size)
-#         output = F.normalize(output, dim=-1)
-#         output = self.aligner(output)  # (batch_size, hidden_size)
-        
-#         return output
-
-
 class RGBDImageEncoder(nn.Module):
     """
-    Lightweight CNN encoder that maps an RGB-D image (4 channels)
+    Lightweight CNN encoder that maps an RGB-D image (4 channels: R, G, B, depth)
     to a single global conditioning embedding vector.
     """
     def __init__(self, output_embedding_dim=image_embedding_dim):
         super().__init__()
 
-        # Input: (B, 4, H, W)
+        # Input expected as (B, 4, H, W)
         self.conv_net = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
 
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),   # H/2, W/2
+            nn.MaxPool2d(2),   # Spatial downsampling: H/2, W/2
 
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),   # H/4, W/4
+            nn.MaxPool2d(2),   # Spatial downsampling: H/4, W/4
 
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1)),  # → (B, 256, 1, 1)
+            nn.AdaptiveAvgPool2d((1, 1)),  # → global pooling: (B, 256, 1, 1)
         )
 
-        # Final MLP → global embedding
+        # Final fully-connected layer → global image embedding
         self.fc = nn.Linear(256, output_embedding_dim)
 
     def forward(self, rgbd_images):
         """
-        rgbd_images: (B, H, W, 4)
-        returns: (B, output_embedding_dim)
+        Forward pass for RGB-D encoder.
+
+        Args:
+            rgbd_images (torch.Tensor): (B, H, W, 4) tensor, channels-last.
+
+        Returns:
+            embedding (torch.Tensor): (B, output_embedding_dim) global vector.
         """
-        # Convert to NCHW
+        # Convert to channels-first (NCHW) for Conv2d
         x = rgbd_images.permute(0, 3, 1, 2).contiguous()
 
         features = self.conv_net(x)            # (B, 256, 1, 1)
@@ -237,14 +243,24 @@ class RGBDImageEncoder(nn.Module):
 
 
 class globalEncoder(nn.Module):
+    """
+    Combines text and RGB-D encoders into a single global conditioning vector.
+
+    - TextEncoder → text_embedding_dim
+    - RGBDImageEncoder → image_embedding_dim
+    - Concatenate and fuse → global_embedding_dim
+    """
     def __init__(self):
         super().__init__()
+        # Text encoder using BERT + projection
         self.text_encoder = TextEncoder()
+        # RGB-D encoder using small CNN backbone
         self.rgbd_encoder = RGBDImageEncoder(output_embedding_dim=image_embedding_dim)
         
-        # self.linear = nn.Linear(text_embedding_dim + image_embedding_dim,
-        #                         global_embedding_dim)  # Combine text and image embeddings
-
+        # Fusion MLP to combine text + image embeddings into a global embedding
+        # Input dim: text_embedding_dim + image_embedding_dim
+        # Hidden dim: 2 * (text + image)
+        # Output dim: global_embedding_dim
         self.fusion = nn.Sequential(
             nn.Linear(text_embedding_dim + image_embedding_dim, (text_embedding_dim + image_embedding_dim) * 2),
             nn.ReLU(inplace=True),
@@ -253,37 +269,28 @@ class globalEncoder(nn.Module):
 
     def forward(self, texts, rgbd_images):
         """        
-        texts: list of strings, length B
-        rgbd_images: (B, H, W, 4) tensor
-        returns: (B, global_embedding_dim) tensor
-        """
-        text_embeddings = self.text_encoder.encode(texts)  # (B, hidden_size)
-        rgbd_embeddings = self.rgbd_encoder(rgbd_images)   # (B, output_embedding_dim)
+        Jointly encode text and RGB-D image(s) into a single global embedding.
 
+        Args:
+            texts: list of strings, length B
+            rgbd_images (torch.Tensor): (B, H, W, 4) tensor
+
+        Returns:
+            global_embedding (torch.Tensor): (B, global_embedding_dim) tensor
+        """
+        # Encode text into dense embeddings
+        text_embeddings = self.text_encoder.encode(texts)  # (B, text_embedding_dim)
+        # Encode RGB-D images into dense embeddings
+        rgbd_embeddings = self.rgbd_encoder(rgbd_images)   # (B, image_embedding_dim)
+
+        # Normalize both embeddings to unit norm
         text_embeddings = F.normalize(text_embeddings, dim=-1)
         rgbd_embeddings = F.normalize(rgbd_embeddings, dim=-1)
 
-        combined = torch.cat((text_embeddings, rgbd_embeddings), dim=1)  # (B, hidden_size + output_embedding_dim)
+        # Concatenate along feature dimension
+        combined = torch.cat((text_embeddings, rgbd_embeddings), dim=1)  # (B, text_embedding_dim + image_embedding_dim)
+
+        # Pass through fusion MLP to obtain final global embedding
         global_embedding = self.fusion(combined)  # (B, global_embedding_dim)
 
         return global_embedding
-
-
-# Debug usage
-if __name__ == "__main__":
-    text_encoder = TextEncoder()
-    sample_text = ["This is a sample text for encoding."]
-
-    embeddings = text_encoder.encode(sample_text)
-    print(embeddings.shape)
-    print(type(embeddings))
-
-    rgbd_encoder = RGBDImageEncoder(output_embedding_dim=512)
-    dummy_images = torch.randn(1, 240, 320, 4)  # (B, H, W, 4)
-    rgbd_embeddings = rgbd_encoder(dummy_images)
-    print(rgbd_embeddings.shape)
-
-    global_encoder = globalEncoder().to(DEVICE)
-    dummy_images = dummy_images.to(DEVICE)
-    global_embeddings = global_encoder(sample_text, dummy_images)
-    print(global_embeddings.shape)
