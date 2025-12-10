@@ -7,7 +7,7 @@ import yaml
 import cv2
 import os
 
-# Load configuration (e.g., dataset paths, depth ranges, number of frames, device, etc.)
+# Load configuration
 with open("config.yaml", 'r') as f:
     config = yaml.safe_load(f)
 

@@ -1,7 +1,3 @@
-# unet3d_backbone.py
-# 3D U-Net backbone with time embedding + optional FiLM global conditioning.
-# Dependencies: torch, einops, einops_exts
-
 import math
 from typing import Optional, Callable, Tuple
 
@@ -16,7 +12,7 @@ import os
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-# Load configuration (e.g., device) from YAML
+# Load configuration
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 

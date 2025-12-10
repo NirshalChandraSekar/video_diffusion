@@ -13,7 +13,7 @@ from transformers import BertModel, BertTokenizer
 from typing import List, Union, Optional, Tuple
 
 
-# Load configuration from YAML file (device, embedding dims, etc.)
+# Load configuration
 with open("config.yaml", 'r') as f:
     config = yaml.safe_load(f)
 
@@ -85,7 +85,7 @@ def tokenize(texts: Union[str, List[str], Tuple[str]]) -> torch.Tensor:
     return encoding.input_ids
 
 # Function to obtain BERT embeddings for tokenized texts
-@torch.no_grad()  # No gradients are calculated in this function
+@torch.no_grad()
 def bert_embed(
     token_ids: torch.Tensor,
     return_cls_repr: bool = False,
@@ -108,12 +108,10 @@ def bert_embed(
     model = get_bert()
     mask = token_ids != pad_id  # Create a mask to ignore padding tokens
 
-    # Move inputs and mask to CUDA if available (following model placement)
     if torch.cuda.is_available():
         token_ids = token_ids.cuda()
         mask = mask.cuda()
 
-    # Obtain the hidden states from the BERT model
     outputs = model(
         input_ids=token_ids,
         attention_mask=mask,
@@ -123,11 +121,9 @@ def bert_embed(
     # Last layer hidden states: (B, L, D)
     hidden_state = outputs.hidden_states[-1]  # Get the last layer of hidden states
 
-    # If return_cls_repr is True, return the representation of the [CLS] token
     if return_cls_repr:
         return hidden_state[:, 0]  # [CLS] token is the first token
 
-    # If no mask provided, return the mean of all tokens in the sequence
     if not exists(mask):
         return hidden_state.mean(dim=1)
 
@@ -153,10 +149,6 @@ class TextEncoder(nn.Module):
         super().__init__()
         self.device = device
 
-        # BERT model + tokenizer are handled by the global helpers:
-        # get_tokenizer(), get_bert(), tokenize(), bert_embed()
-
-        # BERT outputs 768-dim embeddings; we project to text_embedding_dim (e.g. 512)
         self.proj = nn.Sequential(
             nn.Linear(BERT_MODEL_DIM, 1024),
             nn.ReLU(inplace=True),
@@ -173,21 +165,14 @@ class TextEncoder(nn.Module):
         Returns:
             emb (torch.Tensor): (B, text_embedding_dim) tensor on self.device.
         """
-        # 1. Tokenize with your helper
         token_ids = tokenize(texts)  # (B, L) on CPU
 
-        # 2. Get BERT embeddings using your bert_embed() helper
-        #    return_cls_repr=True → use [CLS] token representation
         emb = bert_embed(token_ids, return_cls_repr=True)  # (B, 768)
 
-        # bert_embed already moves to CUDA if available,
-        # but we ensure it's on self.device for safety:
         emb = emb.to(self.device)
 
-        # 3. (Optional but nice) normalize BERT embedding to unit norm
         emb = F.normalize(emb, dim=-1)
 
-        # 4. Project to text_embedding_dim (e.g. 512)
         emb = self.proj(emb)  # (B, text_embedding_dim)
 
         return emb
