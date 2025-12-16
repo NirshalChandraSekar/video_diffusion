@@ -62,7 +62,7 @@ peract_processed_dataset/
 │   ├── ...
 └── ...
 ```
-Note: make sure the original dataset folder name is ```peract_dataset```. The script will create a folder names ```peract_processed_dataset``` and store the processed dataset.
+Note: make sure the original dataset folder name is ```data/peract_dataset```. The script will create a folder named ```data/peract_processed_dataset``` and store the processed dataset.
 
 ## Training
 There are two training scripts: ```train.py``` and ```train_pl.py```. The latter is wrapped using the pytorch lightning package to make use of multi GPU for parallelization. 
