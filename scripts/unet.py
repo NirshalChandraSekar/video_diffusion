@@ -1,3 +1,8 @@
+"""
+3D UNet backbone for the Depth video diffusion model.
+This script was documented with the help of ChatGPT, and verified by the authors.
+"""
+
 import math
 from typing import Optional, Callable, Tuple
 

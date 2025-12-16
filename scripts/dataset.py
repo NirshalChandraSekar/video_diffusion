@@ -1,3 +1,8 @@
+"""
+Dataset class for loading depth video sequences along with conditioning RGBD inputs.
+This script was documented with the help of ChatGPT, and verified by the authors.
+"""
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 

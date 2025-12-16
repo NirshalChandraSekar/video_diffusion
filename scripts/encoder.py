@@ -1,5 +1,6 @@
 """
 This script has the text and image encoders used to encode the conditioning information
+This script was documented with the help of ChatGPT, and verified by the authors.
 """
 
 import torch
