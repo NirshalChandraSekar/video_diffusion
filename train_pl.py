@@ -158,7 +158,7 @@ class DepthVideoDiffusionLightning(pl.LightningModule):
 if __name__ == "__main__":
     model = DepthVideoDiffusionLightning()
 
-    wandb.require("service")  # enables system & GPU metrics
+    wandb.require("service")
 
 
     wandb_logger = WandbLogger(
