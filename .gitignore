@@ -8,3 +8,4 @@ diffused_frames_bad_condition/
 debug_output/
 scripts/unet_old.py
 debug.py
+scripts/dump.py

@@ -130,6 +130,6 @@ def sample_depth_videos(networks):
 
 
 if __name__ == "__main__":
-    ckpt_path = "models/latest-v1.ckpt"
+    ckpt_path = "models/latest.ckpt"
     networks = load_networks(ckpt_path, device)
     sample_depth_videos(networks)

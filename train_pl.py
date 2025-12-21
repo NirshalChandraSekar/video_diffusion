@@ -182,7 +182,7 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         accelerator="gpu",
-        devices=[3, 4, 5, 6, 7],
+        devices=[5, 6, 7],
         strategy=DDPStrategy(find_unused_parameters=True),
         max_epochs=config["training"]["num_epochs"],
         log_every_n_steps=10,
@@ -190,7 +190,7 @@ if __name__ == "__main__":
         callbacks=[checkpoint_callback],
     )
 
-    ckpt_path = "models/latest-v1.ckpt"  # path to checkpoint, if resuming training
+    ckpt_path = "models/latest.ckpt"  # path to checkpoint, if resuming training
     if os.path.exists(ckpt_path):
         trainer.fit(model, ckpt_path=ckpt_path)
     else:
