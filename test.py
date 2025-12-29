@@ -80,6 +80,7 @@ def sample_depth_videos(networks):
                 t_int = int(k)
                 t_tensor = torch.full((B,), t_int, device=device, dtype=torch.long)
                 noise_pred = noise_prediction_network(samples, t_tensor, cond_embedding)
+                # noise_pred = noise_prediction_network.forward_with_cond_scale(samples, t_tensor, cond_embedding, cond_scale=config["diffusion"]["cond_scale"])
                 samples = noise_scheduler.step(
                     model_output=noise_pred,
                     timestep=t_int,
