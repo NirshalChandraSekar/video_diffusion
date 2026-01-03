@@ -24,8 +24,8 @@ with open("config.yaml", 'r') as f:
 # Device and embedding dimensions from config
 DEVICE = config['device']
 text_embedding_dim = config['encoder']['text_embedding_dim'] # 384
-image_embedding_dim = config['encoder']['image_embedding_dim'] # 1024
-global_embedding_dim = config['encoder']['global_embedding_dim'] # 384 + 1024 = 1408
+image_embedding_dim = config['encoder']['image_embedding_dim'] # 512
+global_embedding_dim = config['encoder']['global_embedding_dim'] # 384 + 512 = 896
 
 
 
@@ -117,15 +117,12 @@ class RGBDImageEncoder(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # RGB encoder: standard ResNet expects 3 channels
-        self.rgb_encoder = replace_bn_with_gn(get_resnet("resnet18"))
+        # Depth encoder: make ResNet accept 4 channel
+        self.rgbd_encoder = replace_bn_with_gn(get_resnet("resnet18"))
 
-        # Depth encoder: make ResNet accept 1 channel
-        self.depth_encoder = replace_bn_with_gn(get_resnet("resnet18"))
-
-        old_conv = self.depth_encoder.conv1  # Conv2d(3, 64, 7, 2, 3, bias=False)
-        self.depth_encoder.conv1 = nn.Conv2d(
-            in_channels=1,
+        old_conv = self.rgbd_encoder.conv1  # Conv2d(3, 64, 7, 2, 3, bias=False)
+        self.rgbd_encoder.conv1 = nn.Conv2d(
+            in_channels=4,
             out_channels=old_conv.out_channels,      # 64
             kernel_size=old_conv.kernel_size,        # (7, 7)
             stride=old_conv.stride,                  # (2, 2)
@@ -144,21 +141,16 @@ class RGBDImageEncoder(nn.Module):
             embedding (torch.Tensor): (B, 512+512).
         """
 
-        rgb_image = rgbd_images[:, :, :, :3]  # (B, H, W, 3)
-        depth_image = rgbd_images[:, :, :, 3:]  # (B, H, W, 1)
-
         # Encode RGB image
-        rgb_image = rgb_image.permute(0, 3, 1, 2).contiguous()  # (B, 3, H, W)
-        rgb_features = self.rgb_encoder(rgb_image)  # (B, 512)
+        rgbd_images = rgbd_images.permute(0, 3, 1, 2).contiguous()  # (B, 4, H, W)
+        rgb_features = self.rgbd_encoder(rgbd_images)  # (B, 512)
 
-        # Encode Depth image
-        depth_image = depth_image.permute(0, 3, 1, 2).contiguous()  # (B, 1, H, W)
-        depth_features = self.depth_encoder(depth_image)  # (B, 512)
+
 
         # Concatenate RGB and Depth features
-        embedding = torch.cat((rgb_features, depth_features), dim=1)  # (B, 1024)
+        # embedding = torch.cat((rgb_features, depth_features), dim=1)  # (B, 1024)
 
-        return embedding
+        return rgb_features
         
 
 

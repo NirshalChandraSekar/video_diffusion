@@ -24,8 +24,8 @@ unet:
 
 encoder:
   text_embedding_dim: 384
-  image_embedding_dim: 1024
-  global_embedding_dim: 1408
+  image_embedding_dim: 512
+  global_embedding_dim: 896
   # global_embedding_dim: 512
 
 diffusion:
